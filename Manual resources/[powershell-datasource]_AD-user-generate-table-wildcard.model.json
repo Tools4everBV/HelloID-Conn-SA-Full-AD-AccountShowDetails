@@ -1,0 +1,30 @@
+[
+    {
+        "key":  "Description",
+        "type":  0
+    },
+    {
+        "key":  "SamAccountName",
+        "type":  0
+    },
+    {
+        "key":  "Title",
+        "type":  0
+    },
+    {
+        "key":  "Company",
+        "type":  0
+    },
+    {
+        "key":  "Department",
+        "type":  0
+    },
+    {
+        "key":  "displayName",
+        "type":  0
+    },
+    {
+        "key":  "UserPrincipalName",
+        "type":  0
+    }
+]

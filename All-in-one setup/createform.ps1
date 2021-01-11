@@ -1,614 +1,458 @@
 #HelloID variables
-$PortalBaseUrl = "https://CUSTOMER.helloid.com"
+$script:PortalBaseUrl = "https://CUSTOMER.helloid.com"
 $apiKey = "API_KEY"
 $apiSecret = "API_SECRET"
 $delegatedFormAccessGroupNames = @("Users", "HID_administrators")
- 
+$delegatedFormCategories = @("Active Directory", "User Management")
+
 # Create authorization headers with HelloID API key
 $pair = "$apiKey" + ":" + "$apiSecret"
 $bytes = [System.Text.Encoding]::ASCII.GetBytes($pair)
 $base64 = [System.Convert]::ToBase64String($bytes)
 $key = "Basic $base64"
-$headers = @{"authorization" = $Key}
+$script:headers = @{"authorization" = $Key}
 # Define specific endpoint URI
-if($PortalBaseUrl.EndsWith("/") -eq $false){
-    $PortalBaseUrl = $PortalBaseUrl + "/"
-}
+$script:PortalBaseUrl = $script:PortalBaseUrl.trim("/") + "/"
  
 function Write-ColorOutput($ForegroundColor) {
-  $fc = $host.UI.RawUI.ForegroundColor
-  $host.UI.RawUI.ForegroundColor = $ForegroundColor
-  
-  if ($args) {
-      Write-Output $args
-  }
-  else {
-      $input | Write-Output
-  }
-
-  $host.UI.RawUI.ForegroundColor = $fc
-}
- 
-$variableName = "ADusersSearchOU"
-$variableGuid = ""
-  
-try {
-    $uri = ($PortalBaseUrl +"api/v1/automation/variables/named/$variableName")
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
-  
-    if([string]::IsNullOrEmpty($response.automationVariableGuid)) {
-        #Create Variable
-        $body = @{
-            name = "$variableName";
-            value = '[{ "OU": "OU=Employees,OU=Users,OU=Enyoi,DC=enyoi-media,DC=local"},{ "OU": "OU=Disabled,OU=Users,OU=Enyoi,DC=enyoi-media,DC=local"},{"OU": "OU=External,OU=Users,OU=Enyoi,DC=enyoi-media,DC=local"}]';
-            secret = "false";
-            ItemType = 0;
-        }
-  
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/automation/variable")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-        $variableGuid = $response.automationVariableGuid
-
-        Write-ColorOutput Green "Variable '$variableName' created: $variableGuid"
+    $fc = $host.UI.RawUI.ForegroundColor
+    $host.UI.RawUI.ForegroundColor = $ForegroundColor
+    
+    if ($args) {
+        Write-Output $args
     } else {
-        $variableGuid = $response.automationVariableGuid
-        Write-ColorOutput Yellow "Variable '$variableName' already exists: $variableGuid"
+        $input | Write-Output
     }
-} catch {
-    Write-ColorOutput Red "Variable '$variableName'"
-    $_
+
+    $host.UI.RawUI.ForegroundColor = $fc
 }
-  
-  
-  
-$taskName = "AD-user-generate-table-wildcard"
-$taskGetUsersGuid = ""
-  
-try {
-    $uri = ($PortalBaseUrl +"api/v1/automationtasks?search=$taskName&container=1")
-    $response = (Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false) | Where-Object -filter {$_.name -eq $taskName}
-  
-    if([string]::IsNullOrEmpty($response.automationTaskGuid)) {
-        #Create Task
-  
-        $body = @{
-            name = "$taskName";
-            useTemplate = "false";
-            powerShellScript = @'
-try {
-    $searchValue = $formInput.searchUser
-    $searchQuery = "*$searchValue*"
-      
-      
-    if([String]::IsNullOrEmpty($searchValue) -eq $true){
-        Hid-Add-TaskResult -ResultValue []
-    }else{
-        Hid-Write-Status -Message "SearchQuery: $searchQuery" -Event Information
-        Hid-Write-Status -Message "SearchBase: $searchOUs" -Event Information
-        HID-Write-Summary -Message "Searching for: $searchQuery" -Event Information
-          
-        $ous = $searchOUs | ConvertFrom-Json
-        $users = foreach($item in $ous) {
-            Get-ADUser -Filter {Name -like $searchQuery -or DisplayName -like $searchQuery -or userPrincipalName -like $searchQuery -or email -like $searchQuery} -SearchBase $item.ou -properties *
-        }
-          
-        $users = $users | Sort-Object -Property DisplayName
-        $resultCount = @($users).Count
-        Hid-Write-Status -Message "Result count: $resultCount" -Event Information
-        HID-Write-Summary -Message "Result count: $resultCount" -Event Information
-          
-        if($resultCount -gt 0){
-            foreach($user in $users){
-                $returnObject = @{SamAccountName=$user.SamAccountName; displayName=$user.displayName; UserPrincipalName=$user.UserPrincipalName; Description=$user.Description; Department=$user.Department; Title=$user.Title; Company=$user.company}
-                Hid-Add-TaskResult -ResultValue $returnObject
-            }
+
+function Invoke-HelloIDGlobalVariable {
+    param(
+        [parameter(Mandatory)][String]$Name,
+        [parameter(Mandatory)][String][AllowEmptyString()]$Value,
+        [parameter(Mandatory)][String]$Secret
+    )
+
+    try {
+        $uri = ($script:PortalBaseUrl + "api/v1/automation/variables/named/$Name")
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+    
+        if ([string]::IsNullOrEmpty($response.automationVariableGuid)) {
+            #Create Variable
+            $body = @{
+                name     = $Name;
+                value    = $Value;
+                secret   = $Secret;
+                ItemType = 0;
+            }    
+            $body = $body | ConvertTo-Json
+    
+            $uri = ($script:PortalBaseUrl + "api/v1/automation/variable")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+            $variableGuid = $response.automationVariableGuid
+
+            Write-ColorOutput Green "Variable '$Name' created: $variableGuid"
         } else {
-            Hid-Add-TaskResult -ResultValue []
+            $variableGuid = $response.automationVariableGuid
+            Write-ColorOutput Yellow "Variable '$Name' already exists: $variableGuid"
         }
+    } catch {
+        Write-ColorOutput Red "Variable '$Name', message: $_"
     }
-} catch {
-    HID-Write-Status -Message "Error searching AD user [$searchValue]. Error: $($_.Exception.Message)" -Event Error
-    HID-Write-Summary -Message "Error searching AD user [$searchValue]" -Event Failed
-      
-    Hid-Add-TaskResult -ResultValue []
 }
-  
-'@;
-            automationContainer = "1";
-            variables = @(@{name = "searchOUs"; value = "{{variable.ADusersSearchOU}}"; typeConstraint = "string"; secret = "False"})
-        }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/automationtasks/powershell")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-        $taskGetUsersGuid = $response.automationTaskGuid
 
-        Write-ColorOutput Green "Powershell task '$taskName' created: $taskGetUsersGuid"    
-    } else {
-        #Get TaskGUID
-        $taskGetUsersGuid = $response.automationTaskGuid
-        Write-ColorOutput Yellow "Powershell task '$taskName' already exists: $taskGetUsersGuid"
-    }
-} catch {
-    Write-ColorOutput Red "Powershell task '$taskName'"
-    $_
-}
-  
-  
-  
-$dataSourceName = "AD-user-generate-table-wildcard"
-$dataSourceGetUsersGuid = ""
-  
-try {
-    $uri = ($PortalBaseUrl +"api/v1/datasource/named/$dataSourceName")
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
-  
-    if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
-        #Create DataSource
-        $body = @{
-            name = "$dataSourceName";
-            type = "3";
-            model = @(@{key = "Company"; type = 0}, @{key = "Department"; type = 0}, @{key = "Description"; type = 0}, @{key = "displayName"; type = 0}, @{key = "SamAccountName"; type = 0}, @{key = "Title"; type = 0}, @{key = "UserPrincipalName"; type = 0});
-            automationTaskGUID = "$taskGetUsersGuid";
-            input = @(@{description = ""; translateDescription = "False"; inputFieldType = "1"; key = "searchUser"; type = "0"; options = "1"})
+function Invoke-HelloIDAutomationTask {
+    param(
+        [parameter(Mandatory)][String]$TaskName,
+        [parameter(Mandatory)][String]$UseTemplate,
+        [parameter(Mandatory)][String]$AutomationContainer,
+        [parameter(Mandatory)][String][AllowEmptyString()]$Variables,
+        [parameter(Mandatory)][String]$PowershellScript,
+        [parameter()][String][AllowEmptyString()]$ObjectGuid,
+        [parameter()][String][AllowEmptyString()]$ForceCreateTask,
+        [parameter(Mandatory)][Ref]$returnObject
+    )
+    
+    try {
+        $uri = ($script:PortalBaseUrl +"api/v1/automationtasks?search=$TaskName&container=$AutomationContainer")
+        $responseRaw = (Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false) 
+        $response = $responseRaw | Where-Object -filter {$_.name -eq $TaskName}
+    
+        if([string]::IsNullOrEmpty($response.automationTaskGuid) -or $ForceCreateTask -eq $true) {
+            #Create Task
+
+            $body = @{
+                name                = $TaskName;
+                useTemplate         = $UseTemplate;
+                powerShellScript    = $PowershellScript;
+                automationContainer = $AutomationContainer;
+                objectGuid          = $ObjectGuid;
+                variables           = [Object[]]($Variables | ConvertFrom-Json);
+            }
+            $body = $body | ConvertTo-Json
+    
+            $uri = ($script:PortalBaseUrl +"api/v1/automationtasks/powershell")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+            $taskGuid = $response.automationTaskGuid
+
+            Write-ColorOutput Green "Powershell task '$TaskName' created: $taskGuid"  
+        } else {
+            #Get TaskGUID
+            $taskGuid = $response.automationTaskGuid
+            Write-ColorOutput Yellow "Powershell task '$TaskName' already exists: $taskGuid"
         }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/datasource")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-          
-        $dataSourceGetUsersGuid = $response.dataSourceGUID
-        Write-ColorOutput Green "Task data source '$dataSourceName' created: $dataSourceGetUsersGuid"
-    } else {
-        #Get DatasourceGUID
-        $dataSourceGetUsersGuid = $response.dataSourceGUID
-        Write-ColorOutput Yellow "Task data source '$dataSourceName' already exists: $dataSourceGetUsersGuid"
+    } catch {
+        Write-ColorOutput Red "Powershell task '$TaskName', message: $_"
     }
-} catch {
-    Write-ColorOutput Red "Task data source '$dataSourceName'"
-    $_
-}  
-  
-  
-$taskName = "AD-user-generate-table-attributes-basic"
-$taskGetUserDetailsGuid = ""
-  
-try {
-    $uri = ($PortalBaseUrl +"api/v1/automationtasks?search=$taskName&container=1")
-    $response = (Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false) | Where-Object -filter {$_.name -eq $taskName}
-  
-    if([string]::IsNullOrEmpty($response.automationTaskGuid)) {
-        #Create Task
-  
-        $body = @{
-            name = "$taskName";
-            useTemplate = "false";
-            powerShellScript = @'
-try {
-    $userPrincipalName = $formInput.selectedUser.UserPrincipalName
-    HID-Write-Status -Message "Searching AD user [$userPrincipalName]" -Event Information
+
+    $returnObject.Value = $taskGuid
+}
+
+function Invoke-HelloIDDatasource {
+    param(
+        [parameter(Mandatory)][String]$DatasourceName,
+        [parameter(Mandatory)][String]$DatasourceType,
+        [parameter(Mandatory)][String][AllowEmptyString()]$DatasourceModel,
+        [parameter()][String][AllowEmptyString()]$DatasourceStaticValue,
+        [parameter()][String][AllowEmptyString()]$DatasourcePsScript,        
+        [parameter()][String][AllowEmptyString()]$DatasourceInput,
+        [parameter()][String][AllowEmptyString()]$AutomationTaskGuid,
+        [parameter(Mandatory)][Ref]$returnObject
+    )
+
+    $datasourceTypeName = switch($DatasourceType) { 
+        "1" { "Native data source"; break} 
+        "2" { "Static data source"; break} 
+        "3" { "Task data source"; break} 
+        "4" { "Powershell data source"; break}
+    }
+    
+    try {
+        $uri = ($script:PortalBaseUrl +"api/v1/datasource/named/$DatasourceName")
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
       
-    $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName } -Properties * | select displayname, samaccountname, userPrincipalName, mail, employeeID, Enabled
-    HID-Write-Status -Message "Finished searching AD user [$userPrincipalName]" -Event Information
+        if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
+            #Create DataSource
+            $body = @{
+                name               = $DatasourceName;
+                type               = $DatasourceType;
+                model              = [Object[]]($DatasourceModel | ConvertFrom-Json);
+                automationTaskGUID = $AutomationTaskGuid;
+                value              = [Object[]]($DatasourceStaticValue | ConvertFrom-Json);
+                script             = $DatasourcePsScript;
+                input              = [Object[]]($DatasourceInput | ConvertFrom-Json);
+            }
+            $body = $body | ConvertTo-Json
       
+            $uri = ($script:PortalBaseUrl +"api/v1/datasource")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+              
+            $datasourceGuid = $response.dataSourceGUID
+            Write-ColorOutput Green "$datasourceTypeName '$DatasourceName' created: $datasourceGuid"
+        } else {
+            #Get DatasourceGUID
+            $datasourceGuid = $response.dataSourceGUID
+            Write-ColorOutput Yellow "$datasourceTypeName '$DatasourceName' already exists: $datasourceGuid"
+        }
+    } catch {
+      Write-ColorOutput Red "$datasourceTypeName '$DatasourceName', message: $_"
+    }
+
+    $returnObject.Value = $datasourceGuid
+}
+
+function Invoke-HelloIDDynamicForm {
+    param(
+        [parameter(Mandatory)][String]$FormName,
+        [parameter(Mandatory)][String]$FormSchema,
+        [parameter(Mandatory)][Ref]$returnObject
+    )
+    
+    try {
+        try {
+            $uri = ($script:PortalBaseUrl +"api/v1/forms/$FormName")
+            $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+        } catch {
+            $response = $null
+        }
+    
+        if(([string]::IsNullOrEmpty($response.dynamicFormGUID)) -or ($response.isUpdated -eq $true)) {
+            #Create Dynamic form
+            $body = @{
+                Name       = $FormName;
+                FormSchema = $FormSchema
+            }
+            $body = $body | ConvertTo-Json
+    
+            $uri = ($script:PortalBaseUrl +"api/v1/forms")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+    
+            $formGuid = $response.dynamicFormGUID
+            Write-ColorOutput Green "Dynamic form '$formName' created: $formGuid"
+        } else {
+            $formGuid = $response.dynamicFormGUID
+            Write-ColorOutput Yellow "Dynamic form '$FormName' already exists: $formGuid"
+        }
+    } catch {
+        Write-ColorOutput Red "Dynamic form '$FormName', message: $_"
+    }
+
+    $returnObject.Value = $formGuid
+}
+
+
+function Invoke-HelloIDDelegatedForm {
+    param(
+        [parameter(Mandatory)][String]$DelegatedFormName,
+        [parameter(Mandatory)][String]$DynamicFormGuid,
+        [parameter()][String][AllowEmptyString()]$AccessGroups,
+        [parameter()][String][AllowEmptyString()]$Categories,
+        [parameter(Mandatory)][String]$UseFaIcon,
+        [parameter()][String][AllowEmptyString()]$FaIcon,
+        [parameter(Mandatory)][Ref]$returnObject
+    )
+    $delegatedFormCreated = $false
+    
+    try {
+        try {
+            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms/$DelegatedFormName")
+            $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+        } catch {
+            $response = $null
+        }
+    
+        if([string]::IsNullOrEmpty($response.delegatedFormGUID)) {
+            #Create DelegatedForm
+            $body = @{
+                name            = $DelegatedFormName;
+                dynamicFormGUID = $DynamicFormGuid;
+                isEnabled       = "True";
+                accessGroups    = [Object[]]($AccessGroups | ConvertFrom-Json);
+                useFaIcon       = $UseFaIcon;
+                faIcon          = $FaIcon;
+            }    
+            $body = $body | ConvertTo-Json
+    
+            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+    
+            $delegatedFormGuid = $response.delegatedFormGUID
+            Write-ColorOutput Green "Delegated form '$DelegatedFormName' created: $delegatedFormGuid"
+            $delegatedFormCreated = $true
+
+            $bodyCategories = $Categories
+            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms/$delegatedFormGuid/categories")
+            $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $bodyCategories
+            Write-ColorOutput Green "Delegated form '$DelegatedFormName' updated with categories"
+        } else {
+            #Get delegatedFormGUID
+            $delegatedFormGuid = $response.delegatedFormGUID
+            Write-ColorOutput Yellow "Delegated form '$DelegatedFormName' already exists: $delegatedFormGuid"
+        }
+    } catch {
+        Write-ColorOutput Red "Delegated form '$DelegatedFormName', message: $_"
+    }
+
+    $returnObject.value.guid = $delegatedFormGuid
+    $returnObject.value.created = $delegatedFormCreated
+}
+<# Begin: HelloID Global Variables #>
+$tmpValue = @'
+[{ "OU": "OU=Disabled Users,OU=HelloID Training,DC=veeken,DC=local"},{ "OU": "OU=Users,OU=HelloID Training,DC=veeken,DC=local"},{"OU": "OU=External,OU=HelloID Training,DC=veeken,DC=local"}]
+'@ 
+Invoke-HelloIDGlobalVariable -Name "ADusersSearchOU" -Value $tmpValue -Secret "False" 
+<# End: HelloID Global Variables #>
+
+
+<# Begin: HelloID Data sources #>
+<# Begin: DataSource "AD-user-generate-table-attributes-basic" #>
+$tmpPsScript = @'
+try {
+    $userPrincipalName = $dataSource.selectedUser.UserPrincipalName
+    Write-Information "Searching AD user [$userPrincipalName]"
+     
+    $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName } -Properties * | Select-Object displayname, samaccountname, userPrincipalName, mail, employeeID, Enabled
+    Write-Information -Message "Finished searching AD user [$userPrincipalName]"
+     
     foreach($tmp in $adUser.psObject.properties)
     {
         $returnObject = @{name=$tmp.Name; value=$tmp.value}
-        Hid-Add-TaskResult -ResultValue $returnObject
+        Write-Output $returnObject
     }
-      
-    HID-Write-Status -Message "Finished retrieving AD user [$userPrincipalName] basic attributes" -Event Success
-    HID-Write-Summary -Message "Finished retrieving AD user [$userPrincipalName] basic attributes" -Event Success
+     
+    Write-Information "Finished retrieving AD user [$userPrincipalName] basic attributes"
 } catch {
-    HID-Write-Status -Message "Error retrieving AD user [$userPrincipalName] basic attributes. Error: $($_.Exception.Message)" -Event Error
-    HID-Write-Summary -Message "Error retrieving AD user [$userPrincipalName] basic attributes" -Event Failed
-      
-    Hid-Add-TaskResult -ResultValue []
+    Write-Error "Error retrieving AD user [$userPrincipalName] basic attributes. Error: $($_.Exception.Message)"
 }
-'@;
-            automationContainer = "1";
-        }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/automationtasks/powershell")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-        $taskGetUserDetailsGuid = $response.automationTaskGuid
+'@ 
+$tmpModel = @'
+[{"key":"value","type":0},{"key":"name","type":0}]
+'@ 
+$tmpInput = @'
+{"description":null,"translateDescription":false,"inputFieldType":1,"key":"selectedUser","type":0,"options":1}
+'@ 
+$dataSourceGuid_1 = [PSCustomObject]@{} 
+Invoke-HelloIDDatasource -DatasourceName "AD-user-generate-table-attributes-basic" -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript -$tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_1) 
+<# End: DataSource "AD-user-generate-table-attributes-basic" #>
 
-        Write-ColorOutput Green "Powershell task '$taskName' created: $taskGetUserDetailsGuid"    
-    } else {
-        #Get TaskGUID
-        $taskGetUserDetailsGuid = $response.automationTaskGuid
-        Write-ColorOutput Yellow "Powershell task '$taskName' already exists: $taskGetUserDetailsGuid"
-    }
-} catch {
-    Write-ColorOutput Red "Powershell task '$taskName'"
-    $_
-}
-  
-  
-  
-$dataSourceName = "AD-user-generate-table-attributes-basic"
-$dataSourceGetUserDetailsGuid = ""
-  
+<# Begin: DataSource "AD-user-generate-table-groupmemberships" #>
+$tmpPsScript = @'
 try {
-    $uri = ($PortalBaseUrl +"api/v1/datasource/named/$dataSourceName")
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
-  
-    if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
-        #Create DataSource
-        $body = @{
-            name = "$dataSourceName";
-            type = "3";
-            model = @(@{key = "name"; type = 0}, @{key = "value"; type = 0});
-            automationTaskGUID = "$taskGetUserDetailsGuid";
-            input = @(@{description = ""; translateDescription = "False"; inputFieldType = "1"; key = "selectedUser"; type = "0"; options = "1"})
-        }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/datasource")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-          
-        $dataSourceGetUserDetailsGuid = $response.dataSourceGUID
-        Write-ColorOutput Green "Task data source '$dataSourceName' created: $dataSourceGetUserDetailsGuid"
-    } else {
-        #Get DatasourceGUID
-        $dataSourceGetUserDetailsGuid = $response.dataSourceGUID
-        Write-ColorOutput Yellow "Task data source '$dataSourceName' already exists: $dataSourceGetUserDetailsGuid"
-    }
-} catch {
-    Write-ColorOutput Red "Task data source '$dataSourceName'"
-    $_
-}
- 
- 
-$taskName = "AD-user-generate-table-groupmemberships"
-$taskGetADUserGroupMembershipsGuid = ""
-  
-try {
-    $uri = ($PortalBaseUrl +"api/v1/automationtasks?search=$taskName&container=1")
-    $response = (Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false) | Where-Object -filter {$_.name -eq $taskName}
-  
-    if([string]::IsNullOrEmpty($response.automationTaskGuid)) {
-        #Create Task
-  
-        $body = @{
-            name = "$taskName";
-            useTemplate = "false";
-            powerShellScript = @'
-try {
-    $userPrincipalName = $formInput.selectedUser.UserPrincipalName
-    HID-Write-Status -Message "Searching AD user [$userPrincipalName]" -Event Information
-      
+    $userPrincipalName = $dataSource.selectedUser.UserPrincipalName
+    # Write-Information "Searching AD user [$userPrincipalName]"
+     
     if([String]::IsNullOrEmpty($userPrincipalName) -eq $true){
-        Hid-Add-TaskResult -ResultValue []
+        return
     } else {
         $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName }
-        HID-Write-Status -Message "Finished searching AD user [$userPrincipalName]" -Event Information
-        HID-Write-Summary -Message "Found AD user [$userPrincipalName]" -Event Information
-          
-        $groups = Get-ADPrincipalGroupMembership $adUser | select name | Sort-Object name
-        $groups = $groups | ? {$_.Name -ne "Domain Users"}
+        # Write-Information "Finished searching AD user [$userPrincipalName]"
+        # Write-Information "Found AD user [$userPrincipalName]"
+         
+        $groups = Get-ADPrincipalGroupMembership $adUser | Select-Object name | Sort-Object name
+        $groups = $groups | Where-Object {$_.Name -ne "Domain Users"}
         $resultCount = @($groups).Count
-          
-        Hid-Write-Status -Message "Groupmemberships: $resultCount" -Event Information
-        HID-Write-Summary -Message "Groupmemberships: $resultCount" -Event Information
-          
+         
+        # Write-Information "Groupmemberships: $resultCount"
+         
         if($resultCount -gt 0) {
             foreach($group in $groups)
             {
                 $returnObject = @{name="$($group.name)";}
-                Hid-Add-TaskResult -ResultValue $returnObject
+                Write-Output $returnObject
             }
-        } else{
-            Hid-Add-TaskResult -ResultValue []
         }
     }
 } catch {
-    HID-Write-Status -Message "Error getting groupmemberships [$userPrincipalName]. Error: $($_.Exception.Message)" -Event Error
-    HID-Write-Summary -Message "Error getting groupmemberships [$userPrincipalName]" -Event Failed
-      
-    Hid-Add-TaskResult -ResultValue []
+    Write-Error "Error getting groupmemberships [$userPrincipalName]. Error: $($_.Exception.Message)"
 }
-'@;
-            automationContainer = "1";
-            variables = @()
-        }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/automationtasks/powershell")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-        $taskGetADUserGroupMembershipsGuid = $response.automationTaskGuid
+'@ 
+$tmpModel = @'
+{"key":"name","type":0}
+'@ 
+$tmpInput = @'
+{"description":null,"translateDescription":false,"inputFieldType":1,"key":"selectedUser","type":0,"options":1}
+'@ 
+$dataSourceGuid_2 = [PSCustomObject]@{} 
+Invoke-HelloIDDatasource -DatasourceName "AD-user-generate-table-groupmemberships" -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript -$tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_2) 
+<# End: DataSource "AD-user-generate-table-groupmemberships" #>
 
-        Write-ColorOutput Green "Powershell task '$taskName' created: $taskGetADUserGroupMembershipsGuid"   
-    } else {
-        #Get TaskGUID
-        $taskGetADUserGroupMembershipsGuid = $response.automationTaskGuid
-        Write-ColorOutput Yellow "Powershell task '$taskName' already exists: $taskGetADUserGroupMembershipsGuid"
-    }
-} catch {
-    Write-ColorOutput Red "Powershell task '$taskName'"
-    $_
-}
-  
-  
-  
-$dataSourceName = "AD-user-generate-table-groupmemberships"
-$dataSourceGetADUserGroupMembershipsGuid = ""
-  
+<# Begin: DataSource "AD-user-generate-table-wildcard" #>
+$tmpPsScript = @'
 try {
-    $uri = ($PortalBaseUrl +"api/v1/datasource/named/$dataSourceName")
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
-  
-    if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
-        #Create DataSource
-        $body = @{
-            name = "$dataSourceName";
-            type = "3";
-            model = @(@{key = "name"; type = 0});
-            automationTaskGUID = "$taskGetADUserGroupMembershipsGuid";
-            input = @(@{description = ""; translateDescription = "False"; inputFieldType = "1"; key = "selectedUser"; type = "0"; options = "1"})
+    $searchValue = $dataSource.searchUser
+    $searchQuery = "*$searchValue*"
+    $searchOUs = $ADusersSearchOU
+     
+     
+    if([String]::IsNullOrEmpty($searchValue) -eq $true){
+        return
+    }else{
+        Write-Information "SearchQuery: $searchQuery"
+        Write-Information "SearchBase: $searchOUs"
+         
+        $ous = $searchOUs | ConvertFrom-Json
+        $users = foreach($item in $ous) {
+            Get-ADUser -Filter {Name -like $searchQuery -or DisplayName -like $searchQuery -or userPrincipalName -like $searchQuery -or mail -like $searchQuery} -SearchBase $item.ou -properties SamAccountName, displayName, UserPrincipalName, Description, company, Department, Title
         }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/datasource")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-          
-        $dataSourceGetADUserGroupMembershipsGuid = $response.dataSourceGUID
-        Write-ColorOutput Green "Task data source '$dataSourceName' created: $dataSourceGetADUserGroupMembershipsGuid"
-    } else {
-        #Get DatasourceGUID
-        $dataSourceGetADUserGroupMembershipsGuid = $response.dataSourceGUID
-        Write-ColorOutput Yellow "Task data source '$dataSourceName' already exists: $dataSourceGetADUserGroupMembershipsGuid"
+         
+        $users = $users | Sort-Object -Property DisplayName
+        $resultCount = @($users).Count
+        Write-Information "Result count: $resultCount"
+         
+        if($resultCount -gt 0){
+            foreach($user in $users){
+                $returnObject = @{SamAccountName=$user.SamAccountName; displayName=$user.displayName; UserPrincipalName=$user.UserPrincipalName; Description=$user.Description; Company=$user.company; Department=$user.Department; Title=$user.Title;}
+                Write-Output $returnObject
+            }
+        }
     }
 } catch {
-    Write-ColorOutput Red "Task data source '$dataSourceName'"
-    $_
-}  
-  
-  
-  
-$formName = "AD Account - Show details"
-$formGuid = ""
-  
-try
-{
-    try {
-        $uri = ($PortalBaseUrl +"api/v1/forms/$formName")
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
-    } catch {
-        $response = $null
-    }
-  
-    if(([string]::IsNullOrEmpty($response.dynamicFormGUID)) -or ($response.isUpdated -eq $true))
-    {
-        #Create Dynamic form
-        $form = @"
-[
-  {
-    "label": "Select user account",
-    "fields": [
-      {
-        "key": "searchfield",
-        "templateOptions": {
-          "label": "Search",
-          "placeholder": "Username or email address"
-        },
-        "type": "input",
-        "summaryVisibility": "Hide element",
-        "requiresTemplateOptions": true
-      },
-      {
-        "key": "grid",
-        "templateOptions": {
-          "label": "Select user account",
-          "required": true,
-          "grid": {
-            "columns": [
-              {
-                "headerName": "DisplayName",
-                "field": "displayName"
-              },
-              {
-                "headerName": "UserPrincipalName",
-                "field": "UserPrincipalName"
-              },
-              {
-                "headerName": "Department",
-                "field": "Department"
-              },
-              {
-                "headerName": "Title",
-                "field": "Title"
-              },
-              {
-                "headerName": "Description",
-                "field": "Description"
-              }
-            ],
-            "height": 300,
-            "rowSelection": "single"
-          },
-          "dataSourceConfig": {
-            "dataSourceGuid": "$dataSourceGetUsersGuid",
-            "input": {
-              "propertyInputs": [
-                {
-                  "propertyName": "searchUser",
-                  "otherFieldValue": {
-                    "otherFieldKey": "searchfield"
-                  }
-                }
-              ]
-            }
-          },
-          "useFilter": false
-        },
-        "type": "grid",
-        "summaryVisibility": "Show",
-        "requiresTemplateOptions": true
-      }
-    ]
-  },
-  {
-    "label": "Details",
-    "fields": [
-      {
-        "key": "details",
-        "templateOptions": {
-          "label": "Basic attributes",
-          "required": false,
-          "grid": {
-            "columns": [
-              {
-                "headerName": "Name",
-                "field": "name"
-              },
-              {
-                "headerName": "Value",
-                "field": "value"
-              }
-            ],
-            "height": 350,
-            "rowSelection": "single"
-          },
-          "dataSourceConfig": {
-            "dataSourceGuid": "$dataSourceGetUserDetailsGuid",
-            "input": {
-              "propertyInputs": [
-                {
-                  "propertyName": "selectedUser",
-                  "otherFieldValue": {
-                    "otherFieldKey": "grid"
-                  }
-                }
-              ]
-            }
-          },
-          "useFilter": false
-        },
-        "type": "grid",
-        "summaryVisibility": "Show",
-        "requiresTemplateOptions": true
-      },
-      {
-        "key": "memberships",
-        "templateOptions": {
-          "label": "Memberships",
-          "required": false,
-          "grid": {
-            "columns": [
-              {
-                "headerName": "Name",
-                "field": "name"
-              }
-            ],
-            "height": 300,
-            "rowSelection": "single"
-          },
-          "dataSourceConfig": {
-            "dataSourceGuid": "$dataSourceGetADUserGroupMembershipsGuid",
-            "input": {
-              "propertyInputs": [
-                {
-                  "propertyName": "selectedUser",
-                  "otherFieldValue": {
-                    "otherFieldKey": "grid"
-                  }
-                }
-              ]
-            }
-          },
-          "useFilter": false
-        },
-        "type": "grid",
-        "summaryVisibility": "Show",
-        "requiresTemplateOptions": true
-      }
-    ]
-  }
-]
-"@
-  
-        $body = @{
-            Name = "$formName";
-            FormSchema = $form
-        }
-        $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/forms")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-  
-        $formGuid = $response.dynamicFormGUID
-        Write-ColorOutput Green "Dynamic form '$formName' created: $formGuid"
-    } else {
-        $formGuid = $response.dynamicFormGUID
-        Write-ColorOutput Yellow "Dynamic form '$formName' already exists: $formGuid"
-    }
-} catch {
-    Write-ColorOutput Red "Dynamic form '$formName'"
-    $_
+    $msg = "Error searching AD user [$searchValue]. Error: $($_.Exception.Message)"
+    Write-Error $msg
 }
-  
-  
-  
-  
-$delegatedFormAccessGroupGuids = @()
+'@ 
+$tmpModel = @'
+[{"key":"Description","type":0},{"key":"SamAccountName","type":0},{"key":"Title","type":0},{"key":"Company","type":0},{"key":"Department","type":0},{"key":"displayName","type":0},{"key":"UserPrincipalName","type":0}]
+'@ 
+$tmpInput = @'
+{"description":null,"translateDescription":false,"inputFieldType":1,"key":"searchUser","type":0,"options":1}
+'@ 
+$dataSourceGuid_0 = [PSCustomObject]@{} 
+Invoke-HelloIDDatasource -DatasourceName "AD-user-generate-table-wildcard" -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript -$tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_0) 
+<# End: DataSource "AD-user-generate-table-wildcard" #>
+<# End: HelloID Data sources #>
 
+<# Begin: Dynamic Form "AD Account - Show details" #>
+$tmpSchema = @"
+[{"label":"Select user account","fields":[{"key":"searchfield","templateOptions":{"label":"Search","placeholder":"Username or email address"},"type":"input","summaryVisibility":"Hide element","requiresTemplateOptions":true},{"key":"grid","templateOptions":{"label":"Select user account","required":true,"grid":{"columns":[{"headerName":"DisplayName","field":"displayName"},{"headerName":"UserPrincipalName","field":"UserPrincipalName"},{"headerName":"Department","field":"Department"},{"headerName":"Title","field":"Title"},{"headerName":"Description","field":"Description"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_0","input":{"propertyInputs":[{"propertyName":"searchUser","otherFieldValue":{"otherFieldKey":"searchfield"}}]}},"useFilter":false},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true}]},{"label":"Details","fields":[{"key":"details","templateOptions":{"label":"Basic attributes","required":false,"grid":{"columns":[{"headerName":"Name","field":"name"},{"headerName":"Value","field":"value"}],"height":350,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_1","input":{"propertyInputs":[{"propertyName":"selectedUser","otherFieldValue":{"otherFieldKey":"grid"}}]}},"useFilter":false},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true},{"key":"memberships","templateOptions":{"label":"Memberships","required":false,"grid":{"columns":[{"headerName":"Name","field":"name"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_2","input":{"propertyInputs":[{"propertyName":"selectedUser","otherFieldValue":{"otherFieldKey":"grid"}}]}},"useFilter":false},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true}]}]
+"@ 
+
+$dynamicFormGuid = [PSCustomObject]@{} 
+Invoke-HelloIDDynamicForm -FormName "AD Account - Show details" -FormSchema $tmpSchema  -returnObject ([Ref]$dynamicFormGuid) 
+<# END: Dynamic Form #>
+
+<# Begin: Delegated Form Access Groups and Categories #>
+$delegatedFormAccessGroupGuids = @()
 foreach($group in $delegatedFormAccessGroupNames) {
     try {
-        $uri = ($PortalBaseUrl +"api/v1/groups/$group")
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
+        $uri = ($script:PortalBaseUrl +"api/v1/groups/$group")
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
         $delegatedFormAccessGroupGuid = $response.groupGuid
         $delegatedFormAccessGroupGuids += $delegatedFormAccessGroupGuid
         
         Write-ColorOutput Green "HelloID (access)group '$group' successfully found: $delegatedFormAccessGroupGuid"
     } catch {
-        Write-ColorOutput Red "HelloID (access)group '$group'"
-        $_
+        Write-ColorOutput Red "HelloID (access)group '$group', message: $_"
     }
 }
-  
-  
-  
-$delegatedFormName = "AD Account - Show details"
-$delegatedFormGuid = ""
-$delegatedFormCreated = $false
-  
-try {
+$delegatedFormAccessGroupGuids = ($delegatedFormAccessGroupGuids | ConvertTo-Json -Compress)
+
+$delegatedFormCategoryGuids = @()
+foreach($category in $delegatedFormCategories) {
     try {
-        $uri = ($PortalBaseUrl +"api/v1/delegatedforms/$delegatedFormName")
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false
+        $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories/$category")
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+        $tmpGuid = $response.delegatedFormCategoryGuid
+        $delegatedFormCategoryGuids += $tmpGuid
+        
+        Write-ColorOutput Green "HelloID Delegated Form category '$category' successfully found: $tmpGuid"
     } catch {
-        $response = $null
-    }
-  
-    if([string]::IsNullOrEmpty($response.delegatedFormGUID)) {
-        #Create DelegatedForm
+        Write-ColorOutput Yellow "HelloID Delegated Form category '$category' not found"
         $body = @{
-            name = "$delegatedFormName";
-            dynamicFormGUID = "$formGuid";
-            isEnabled = "True";
-            accessGroups = $delegatedFormAccessGroupGuids;
-            useFaIcon = "True";
-            faIcon = "fa fa-search";
-        }  
-  
+            name = @{"en" = $category};
+        }
         $body = $body | ConvertTo-Json
-  
-        $uri = ($PortalBaseUrl +"api/v1/delegatedforms")
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Verbose:$false -Body $body
-  
-        $delegatedFormGuid = $response.delegatedFormGUID
-        Write-ColorOutput Green "Delegated form '$delegatedFormName' created: $delegatedFormGuid"
-        $delegatedFormCreated = $true
-    } else {
-        #Get delegatedFormGUID
-        $delegatedFormGuid = $response.delegatedFormGUID
-        Write-ColorOutput Yellow "Delegated form '$delegatedFormName' already exists: $delegatedFormGuid"
+
+        $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories")
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
+        $tmpGuid = $response.delegatedFormCategoryGuid
+        $delegatedFormCategoryGuids += $tmpGuid
+
+        Write-ColorOutput Green "HelloID Delegated Form category '$category' successfully created: $tmpGuid"
     }
-} catch {
-    Write-ColorOutput Red "Delegated form '$delegatedFormName'"
-    $_
 }
+$delegatedFormCategoryGuids = ($delegatedFormCategoryGuids | ConvertTo-Json -Compress)
+<# End: Delegated Form Access Groups and Categories #>
+
+<# Begin: Delegated Form #>
+$delegatedFormRef = [PSCustomObject]@{guid = $null; created = $null} 
+Invoke-HelloIDDelegatedForm -DelegatedFormName "AD Account - Show details" -DynamicFormGuid $dynamicFormGuid -AccessGroups $delegatedFormAccessGroupGuids -Categories $delegatedFormCategoryGuids -UseFaIcon "True" -FaIcon "fa fa-search" -returnObject ([Ref]$delegatedFormRef) 
+<# End: Delegated Form #>
+
+<# Begin: Delegated Form Task #>
+if($delegatedFormRef.created -eq $true) { 
+	$tmpScript = @'
+
+'@; 
+
+	$tmpVariables = @'
+
+'@ 
+
+	$delegatedFormTaskGuid = [PSCustomObject]@{} 
+	Invoke-HelloIDAutomationTask -TaskName "" -UseTemplate "" -AutomationContainer "" -Variables $tmpVariables -PowershellScript $tmpScript -ObjectGuid $delegatedFormRef.guid -ForceCreateTask $true -returnObject ([Ref]$delegatedFormTaskGuid) 
+} else {
+	Write-ColorOutput Yellow "Delegated form 'AD Account - Show details' already exists. Nothing to do with the Delegated Form task..." 
+}
+<# End: Delegated Form Task #>
