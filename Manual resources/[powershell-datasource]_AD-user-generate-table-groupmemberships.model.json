@@ -1,4 +1,10 @@
-{
-    "key":  "name",
-    "type":  0
-}
+[
+    {
+        "key":  "name",
+        "type":  0
+    },
+    {
+        "key":  "sid",
+        "type":  0
+    }
+]

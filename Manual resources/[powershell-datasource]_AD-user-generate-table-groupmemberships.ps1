@@ -9,7 +9,7 @@ try {
         # Write-Information "Finished searching AD user [$userPrincipalName]"
         # Write-Information "Found AD user [$userPrincipalName]"
          
-        $groups = Get-ADPrincipalGroupMembership $adUser | Select-Object name | Sort-Object name
+        $groups = Get-ADPrincipalGroupMembership $adUser | Select-Object name, sid | Sort-Object name
         $groups = $groups | Where-Object {$_.Name -ne "Domain Users"}
         $resultCount = @($groups).Count
          
@@ -18,7 +18,7 @@ try {
         if($resultCount -gt 0) {
             foreach($group in $groups)
             {
-                $returnObject = @{name="$($group.name)";}
+                $returnObject = @{name="$($group.name)"; sid = [string]"$($group.sid)"}
                 Write-Output $returnObject
             }
         }
