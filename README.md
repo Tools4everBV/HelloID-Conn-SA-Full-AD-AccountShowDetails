@@ -36,11 +36,11 @@ After the all-in-one PowerShell script has run and created all the required reso
 ## Manual resources
 This Delegated Form uses the following resources in order to run
 
-### Powershell data source 'AD-user-generate-table-wildcard'
+### Powershell data source 'AD-user-generate-table-wildcard-show-details'
 This Powershell data source runs an Active Directory query to search for matching AD user accounts. It uses an array of Active Directory OU's specified as HelloID user defined variable named _"ADusersSearchOU"_ to specify the search scope.
 
-### Powershell data source 'AD-user-generate-table-attributes-basic'
+### Powershell data source 'AD-user-generate-table-attributes-basic-show-details'
 This Powershell data source runs an Active Directory query to select a list of basic user attributes of the selected AD user account.  
 
-### Powershell data source 'AD-user-generate-table-groupmemberships'
+### Powershell data source 'AD-user-generate-table-groupmemberships-show-details'
 This Powershell data source runs an Active Directory query to receive the list of current groupmemberships based on the selected target AD user account.
