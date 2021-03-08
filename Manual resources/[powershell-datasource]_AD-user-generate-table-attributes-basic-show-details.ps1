@@ -2,7 +2,7 @@ try {
     $userPrincipalName = $dataSource.selectedUser.UserPrincipalName
     Write-Information "Searching AD user [$userPrincipalName]"
      
-    $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName } -Properties * | Select-Object displayname, samaccountname, userPrincipalName, mail, employeeID, Enabled
+    $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName } -Properties displayname, samaccountname, userPrincipalName, mail, employeeID, Enabled | Select-Object displayname, samaccountname, userPrincipalName, mail, employeeID, Enabled
     Write-Information -Message "Finished searching AD user [$userPrincipalName]"
      
     foreach($tmp in $adUser.psObject.properties)
