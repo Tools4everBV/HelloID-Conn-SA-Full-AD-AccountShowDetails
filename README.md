@@ -44,3 +44,6 @@ This Powershell data source runs an Active Directory query to select a list of b
 
 ### Powershell data source 'AD-user-generate-table-groupmemberships-show-details'
 This Powershell data source runs an Active Directory query to receive the list of current groupmemberships based on the selected target AD user account.
+
+# HelloID Docs
+The official HelloID documentation can be found at: https://docs.helloid.com/
