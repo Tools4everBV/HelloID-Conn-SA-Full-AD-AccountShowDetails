@@ -5,7 +5,13 @@ This HelloID Service Automation Delegated Form provides AD Account show details 
  2. Show basic AD user account attributes of selected target user
  3. Show current AD groupmemberships of selectef target user
 
- 
+
+## Versioning
+| Version | Description | Date |
+| - | - | - |
+| 1.0.1   | Added version number and updated all-in-one script | 2021/11/03  |
+| 1.0.0   | Initial release | 2020/09/01  |
+
 <!-- TABLE OF CONTENTS -->
 ## Table of Contents
 * [Description](#description)
@@ -13,6 +19,7 @@ This HelloID Service Automation Delegated Form provides AD Account show details 
   * [Getting started](#getting-started)
 * [Post-setup configuration](#post-setup-configuration)
 * [Manual resources](#manual-resources)
+* [Getting help](#getting-help)
 
 
 ## All-in-one PowerShell setup script
@@ -45,5 +52,8 @@ This Powershell data source runs an Active Directory query to select a list of b
 ### Powershell data source 'AD-user-generate-table-groupmemberships-show-details'
 This Powershell data source runs an Active Directory query to receive the list of current groupmemberships based on the selected target AD user account.
 
-# HelloID Docs
+## Getting help
+_If you need help, feel free to ask questions on our [forum](https://forum.helloid.com/forum/helloid-connectors/service-automation/499-helloid-sa-active-directory-ad-account-show-details)_
+
+## HelloID Docs
 The official HelloID documentation can be found at: https://docs.helloid.com/
