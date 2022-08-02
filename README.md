@@ -9,7 +9,7 @@ This HelloID Service Automation Delegated Form provides AD Account show details 
 ## Versioning
 | Version | Description | Date |
 | - | - | - |
-| 1.0.2   | Added version number and updated scripts with audit logging | 2022/08/02  |
+| 1.0.2   | Added version number and updated code for SA agent | 2022/08/02  |
 | 1.0.1   | Added version number and updated all-in-one script | 2021/11/03  |
 | 1.0.0   | Initial release | 2020/09/01  |
 
