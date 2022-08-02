@@ -1,10 +1,10 @@
 [
     {
-        "key":  "name",
+        "key":  "sid",
         "type":  0
     },
     {
-        "key":  "sid",
+        "key":  "name",
         "type":  0
     }
 ]
