@@ -1,19 +1,19 @@
 try {
     $userPrincipalName = $dataSource.selectedUser.UserPrincipalName
-    # Write-Information "Searching AD user [$userPrincipalName]"
+    Write-Information "Searching AD user [$userPrincipalName]"
      
     if([String]::IsNullOrEmpty($userPrincipalName) -eq $true){
         return
     } else {
         $adUser = Get-ADuser -Filter { UserPrincipalName -eq $userPrincipalName }
-        # Write-Information "Finished searching AD user [$userPrincipalName]"
-        # Write-Information "Found AD user [$userPrincipalName]"
+        Write-Information "Finished searching AD user [$userPrincipalName]"
+        Write-Information "Found AD user [$userPrincipalName]"
          
         $groups = Get-ADPrincipalGroupMembership $adUser | Select-Object name, sid | Sort-Object name
         $groups = $groups | Where-Object {$_.Name -ne "Domain Users"}
         $resultCount = @($groups).Count
          
-        # Write-Information "Groupmemberships: $resultCount"
+        Write-Information "Groupmemberships: $resultCount"
          
         if($resultCount -gt 0) {
             foreach($group in $groups)
