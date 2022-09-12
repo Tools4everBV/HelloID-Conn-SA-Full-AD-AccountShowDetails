@@ -485,6 +485,8 @@ foreach($category in $delegatedFormCategories) {
     try {
         $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories/$category")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+        $response = $response | Where-Object {$_.name.en -eq $category}
+	
         $tmpGuid = $response.delegatedFormCategoryGuid
         $delegatedFormCategoryGuids += $tmpGuid
         
